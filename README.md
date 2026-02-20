@@ -1,4 +1,4 @@
-# 🐚 My Shell — Minimal Production-Level Shell
+# 💻 My Shell — Minimal Production-Level Shell
 
 A compact, educational Unix-style shell written in C with common features useful for learning and small scripting tasks.
 
