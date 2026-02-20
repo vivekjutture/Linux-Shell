@@ -1,63 +1,246 @@
+/*
+ * Production-Level Mini Shell
+ * Features:
+ * - Builtins: cd, exit, history, export
+ * - Pipes
+ * - Redirection (<, >, >>)
+ * - Background execution (&)
+ * - Variable expansion
+ * - Script execution
+ * - Signal handling (Ctrl+C)
+ */
+
 #include <stdio.h>
-#include <unistd.h> 
 #include <stdlib.h>
-#include <sys/wait.h>
+#include <unistd.h>
 #include <string.h>
-#define MAX_LEN 100
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <signal.h>
 
-int main() 
-{
-	char str[MAX_LEN]; // takes user input
-	char *tok; // used to seperate and store each word from given command 
-	char *args[MAX_LEN]; // stores each seperated word as arguments
-	system("clear"); // clears the terminal
-	printf("WELCOME!!! to My Shell\n\nMy name is Vivek Utture\n\nI've created this Linux Shell where basic Linux Commands can be executed\n\nDownload the source code from 'https://github.com/vivekutture/Linux-Shell.git'\n\n\033[1mTo return to the Orignal Shell enter \033[3m\033[4mexit\033[m \n\n"); // Here \033 is Esc character and ASCII 27 is followed by [, then zero or more numbers separated by ; describe the color and format to switch to from that point onwards and finally the letter m. (Here, '1' is for Bold,'3' is for Italic, '4' is for Underline & '\033[m' is to RESET every formatting.)
-	while (1) 
-	{
-		memset(args,'\0',MAX_LEN); // sets the argument array with 'NULL' values simply 'Nullifies' the argument array
-		printf("\033[1;32m ||| SHELL NAME ||| \033[1;34m~\033[1;32m\033[m$ "); // shell prompt where \033 is Esc character and ASCII 27 is followed by [, then zero or more numbers separated by ; describe the color and format to switch to from that point onwards and finally the letter m. (Here, '1' is for Bold,'32' is for Green Color for text, '34' is for Blue Color for text & '\033[m' is to RESET every formatting.)
-		fgets(str,MAX_LEN,stdin); // takes a whole line as a input untill "Enter" is pressed 
-		if(strcmp(str,"\n")==0) // even if command is not entered and "Enter" is pressed then the execution will continue with next iteration
-		{
-			continue;
-		}
-		int len=strlen(str); // calculates and stores length of the given command
-		str[len-1]='\0'; // terminates the given command
-		if(strcmp(str,"exit")==0) // if command is exit then loop will break, execution will terminate and control goes back to original shell
-		{
-			break;
-		}
-		tok=strtok(str," "); // seperates each word from given command
-		int i=0;
-		while(tok!=NULL) // transfers each word from token to array untill token reaches to NULL 
-		{
-			args[i++]=tok;
-			tok=strtok(NULL," ");
-		}
-		pid_t pid=fork(); // child process creation
-		if(pid==0) 
-		{	
-			//child process		
-			if(execvp(args[0],args)!=0) // checks the given command with arguments executes successfully or not if executes successfully returns 0 otherwise else ('Syntax & Description' : int execvp(const char *file, char *const argv[]); The char *const argv[] argument is an array of pointers to null terminated strings that represent the argument list available to the new program. The first argument, by convention, should point to the file name associated with the file being executed. The array of pointers must be terminated by a null pointer.)
-			{
-				perror("\nCommand not Found "); // throws error
-				sleep(2); // delay for a specified amount of time
-				system("clear"); // clears the terminal
-				exit(EXIT_FAILURE); //terminates the unsuccessful execution of a program
+#define MAX_INPUT 1024
+#define MAX_ARGS 128
+#define MAX_HISTORY 1000
 
-			}
-				
-		}
-		else if(pid<0) // checks any process cretaed or not or any process exists or not
-		{
-			printf("\nProcess doesn't exist\nExiting...");
-			break;			
-		}
-		else
-		{
-			// parent process
-			wait(0); // wait for process to change state
-		}
-	}
-	exit(0); // program termination
+char *history[MAX_HISTORY];
+int history_count = 0;
+
+/*-------------------- Utility --------------------*/
+void add_history(char *line) {
+    if (history_count < MAX_HISTORY)
+        history[history_count++] = strdup(line);
+}
+
+void show_history() {
+    for (int i = 0; i < history_count; i++)
+        printf("%d %s\n", i + 1, history[i]);
+}
+
+void trim_newline(char *line) {
+    line[strcspn(line, "\n")] = 0;
+}
+
+/*----------------- Signal Handling ----------------*/
+void sigint_handler(int sig) {
+    write(STDOUT_FILENO, "\nmyshell> ", 10);
+}
+
+void init_signals() {
+    signal(SIGINT, sigint_handler);
+    signal(SIGTSTP, SIG_IGN);
+}
+
+/*----------------- Variable Expansion ----------------*/
+void expand_variables(char *line) {
+    char buffer[MAX_INPUT] = {0};
+    char var[128];
+    int i = 0;
+
+    while (line[i]) {
+        if (line[i] == '$') {
+            i++;
+            int k = 0;
+            while (isalnum(line[i]) || line[i]=='_')
+                var[k++] = line[i++];
+            var[k] = '\0';
+            char *val = getenv(var);
+            if (val)
+                strcat(buffer, val);
+        } else {
+            strncat(buffer, &line[i], 1);
+            i++;
+        }
+    }
+    strcpy(line, buffer);
+}
+
+/*----------------- Built-in Commands ----------------*/
+int handle_builtin(char **args) {
+    if (!args[0]) return 1;
+
+    if (strcmp(args[0], "exit") == 0)
+        exit(0);
+
+    if (strcmp(args[0], "cd") == 0) {
+        if (!args[1])
+            chdir(getenv("HOME"));
+        else if (chdir(args[1]) != 0)
+            perror("cd");
+        return 1;
+    }
+
+    if (strcmp(args[0], "history") == 0) {
+        show_history();
+        return 1;
+    }
+
+    if (strcmp(args[0], "export") == 0) {
+        if (args[1]) {
+            char *key = strtok(args[1], "=");
+            char *val = strtok(NULL, "=");
+            if (key && val)
+                setenv(key, val, 1);
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
+/*----------------- Parse Arguments ----------------*/
+void parse_args(char *line, char **args) {
+    int i = 0;
+    args[i] = strtok(line, " ");
+    while (args[i] != NULL && i < MAX_ARGS-1)
+        args[++i] = strtok(NULL, " ");
+}
+
+/*----------------- Redirection ----------------*/
+void handle_redirection(char **args) {
+    for (int i = 0; args[i]; i++) {
+        if (strcmp(args[i], ">") == 0) {
+            int fd = open(args[i+1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            args[i] = NULL;
+        } else if (strcmp(args[i], ">>") == 0) {
+            int fd = open(args[i+1], O_WRONLY | O_CREAT | O_APPEND, 0644);
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            args[i] = NULL;
+        } else if (strcmp(args[i], "<") == 0) {
+            int fd = open(args[i+1], O_RDONLY);
+            if (fd < 0) perror("open");
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+            args[i] = NULL;
+        }
+    }
+}
+
+/*----------------- Pipeline Execution ----------------*/
+void execute_pipeline(char *line) {
+    char *commands[10];
+    int num_cmds = 0;
+    commands[num_cmds++] = strtok(line, "|");
+    while ((commands[num_cmds++] = strtok(NULL, "|")) != NULL);
+
+    int in_fd = 0;
+
+    for (int i=0; i<num_cmds-1; i++) {
+        int pipefd[2];
+        pipe(pipefd);
+
+        if (fork() == 0) {
+            dup2(in_fd, 0);
+            dup2(pipefd[1], 1);
+            close(pipefd[0]);
+            char *args[MAX_ARGS];
+            parse_args(commands[i], args);
+            handle_redirection(args);
+            execvp(args[0], args);
+            perror("exec");
+            exit(1);
+        }
+
+        wait(NULL);
+        close(pipefd[1]);
+        in_fd = pipefd[0];
+    }
+
+    // Last command
+    char *args[MAX_ARGS];
+    parse_args(commands[num_cmds-2], args);
+    if (fork() == 0) {
+        dup2(in_fd, 0);
+        handle_redirection(args);
+        execvp(args[0], args);
+        perror("exec");
+        exit(1);
+    }
+    wait(NULL);
+}
+
+/*----------------- Main Shell Loop ----------------*/
+void shell_loop(FILE *input) {
+    char line[MAX_INPUT];
+
+    while (1) {
+        if (input == stdin) printf("myshell> ");
+        fflush(stdout);
+
+        if (!fgets(line, MAX_INPUT, input)) break;
+        trim_newline(line);
+        if (strlen(line) == 0) continue;
+
+        add_history(line);
+        expand_variables(line);
+
+        // Pipeline
+        if (strchr(line, '|')) {
+            execute_pipeline(line);
+            continue;
+        }
+
+        char *args[MAX_ARGS];
+        parse_args(line, args);
+
+        // Background execution
+        int background = 0;
+        int i=0;
+        while (args[i]) i++;
+        if (i>0 && strcmp(args[i-1], "&")==0) {
+            background = 1;
+            args[i-1] = NULL;
+        }
+
+        if (!handle_builtin(args)) {
+            pid_t pid = fork();
+            if (pid == 0) {
+                handle_redirection(args);
+                execvp(args[0], args);
+                perror("exec");
+                exit(1);
+            } else if (!background) {
+                waitpid(pid, NULL, 0);
+            }
+        }
+    }
+}
+
+/*----------------- Main ----------------*/
+int main(int argc, char *argv[]) {
+    init_signals();
+
+    if (argc > 1) {
+        FILE *file = fopen(argv[1], "r");
+        if (!file) { perror("script"); return 1; }
+        shell_loop(file);
+        fclose(file);
+    } else {
+        shell_loop(stdin);
+    }
+
+    return 0;
 }
