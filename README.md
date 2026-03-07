@@ -1,4 +1,4 @@
-# 💻 My Shell — Minimal Production-Level Shell
+# 💻 MicroBash — Minimal Production-Level Shell
 
 A compact, educational Unix-style shell written in C with common features useful for learning and small scripting tasks.
 
@@ -23,14 +23,14 @@ A compact, educational Unix-style shell written in C with common features useful
 On Linux / WSL / macOS (recommended):
 
 ```bash
-gcc -o myshell My_Shell.c
+gcc -o microbash micro_bash.c
 ```
 
 On Windows (use WSL, MinGW, or MSYS2):
 - With MinGW (example):
 
 ```powershell
-gcc -o myshell.exe My_Shell.c
+gcc -o microbash.exe micro_bash.c
 ```
 
 Notes: Some platform differences (signals, `/dev/null`, path behavior) may exist on native Windows — WSL provides the closest behavior to Unix.
@@ -40,13 +40,13 @@ Notes: Some platform differences (signals, `/dev/null`, path behavior) may exist
 Interactive shell:
 
 ```bash
-./myshell        # or myshell.exe on Windows
+./microbash        # or microbash.exe on Windows
 ```
 
 Run a script file:
 
 ```bash
-./myshell myscript.sh
+./microbash myscript.sh
 ```
 
 **Usage Examples**

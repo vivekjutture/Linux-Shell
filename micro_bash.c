@@ -43,7 +43,7 @@ void trim_newline(char *line) {
 
 /*----------------- Signal Handling ----------------*/
 void sigint_handler(int sig) {
-    write(STDOUT_FILENO, "\nmyshell> ", 10);
+    write(STDOUT_FILENO, "\nmicroBash > ", 10);
 }
 
 void init_signals() {
@@ -187,7 +187,7 @@ void shell_loop(FILE *input) {
     char line[MAX_INPUT];
 
     while (1) {
-        if (input == stdin) printf("myshell> ");
+        if (input == stdin) printf("microBash > ");
         fflush(stdout);
 
         if (!fgets(line, MAX_INPUT, input)) break;
